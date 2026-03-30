@@ -1,0 +1,104 @@
+-- CREATE OR REPLACE VIEW vw_clean_website_sessions AS
+-- WITH RankedSessions AS (
+--     SELECT 
+--         website_session_id,
+--         user_id,
+--         created_at,
+--         LOWER(TRIM(utm_source)) AS utm_source,
+--         LOWER(TRIM(utm_campaign)) AS utm_campaign,
+--         LOWER(TRIM(device_type)) AS device_type,
+--         LOWER(TRIM(http_referer)) AS http_referer,
+--         is_repeat_session,
+--         ROW_NUMBER() OVER(PARTITION BY user_id, created_at ORDER BY website_session_id) as row_num
+--     FROM website_sessions
+--     WHERE created_at IS NOT NULL
+-- )
+-- SELECT 
+--     website_session_id, 
+--     user_id, 
+--     created_at, 
+--     utm_source, 
+--     utm_campaign, 
+--     device_type, 
+--     http_referer, 
+--     is_repeat_session
+-- FROM RankedSessions
+-- WHERE row_num = 1;
+
+-- CREATE OR REPLACE VIEW vw_clean_website_pageviews AS
+-- SELECT 
+--     p.website_pageview_id,
+--     p.website_session_id,
+--     LOWER(TRIM(p.pageview_url)) AS pageview_url,
+--     p.created_at
+-- FROM website_pageviews p
+-- -- الربط بالـ View النظيف عشان نتأكد إن الجلسة دي صالحة وموجودة
+-- JOIN vw_clean_website_sessions s ON p.website_session_id = s.website_session_id
+-- WHERE p.created_at >= s.created_at;
+
+
+-- CREATE OR REPLACE VIEW vw_clean_orders AS
+-- WITH FixedOrders AS (
+--     SELECT 
+--         order_id,
+--         website_session_id,
+--         primary_product_id,
+--         -- تصليح أسعار المنتجات المضروبة
+--         CASE 
+--             WHEN primary_product_id = 3 THEN 49.99
+--             WHEN primary_product_id = 4 THEN 24.99
+--             ELSE price_usd 
+--         END AS price_usd,
+--         cogs_usd,
+--         created_at
+--     FROM orders
+--     WHERE primary_product_id IN (1, 2, 3, 4) -- استبعاد منتج 99 وأي منتج وهمي
+-- )
+-- SELECT * FROM FixedOrders
+-- WHERE price_usd > 0                -- استبعاد الأسعار السالبة والصفرية
+--   AND cogs_usd <= price_usd;       -- استبعاد التكلفة الأعلى من السعر
+
+
+-- CREATE OR REPLACE VIEW vw_clean_order_items AS
+-- WITH FixedOrderItems AS (
+--     SELECT 
+--         order_item_id,
+--         order_id,
+--         product_id,
+--         is_primary_item,
+--         -- تصليح أسعار المنتجات المضروبة
+--         CASE 
+--             WHEN product_id = 3 THEN 49.99
+--             WHEN product_id = 4 THEN 24.99
+--             ELSE price_usd 
+--         END AS price_usd,
+--         cogs_usd,
+--         created_at
+--     FROM order_items
+--     WHERE product_id IN (1, 2, 3, 4) -- استبعاد منتج 99
+-- )
+-- SELECT *
+-- FROM FixedOrderItems
+-- WHERE price_usd > 0
+--   AND cogs_usd <= price_usd;
+  
+  
+  
+-- CREATE OR REPLACE VIEW vw_clean_order_item_refunds AS
+-- SELECT 
+--     r.order_item_refund_id,
+--     r.order_item_id,
+--     r.refund_amount_usd,
+--     r.created_at
+-- FROM order_item_refunds r
+-- JOIN vw_clean_order_items oi ON r.order_item_id = oi.order_item_id 
+-- WHERE r.refund_amount_usd > 0;
+
+
+-- CREATE OR REPLACE VIEW vw_clean_products AS
+-- SELECT 
+--     product_id,
+--     product_name,
+--     created_at
+-- FROM products
+-- WHERE product_id IN (1, 2, 3, 4);
